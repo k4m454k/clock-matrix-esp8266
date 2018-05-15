@@ -18,8 +18,49 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h> // Библиотека для OTA-прошивки
 #include <SerialCommand.h>
+#include <Ticker.h>
 
+Ticker blinker;
 SerialCommand SCmd;
+
+
+#define SUN { \
+     {1, 0, 0, 1, 0, 0, 0, 1}, \
+     {0, 1, 0, 0, 0, 0, 1, 0}, \
+     {0, 0, 0, 1, 1, 0, 0, 0}, \
+     {0, 0, 1, 1, 1, 1, 0, 1}, \
+     {1, 0, 1, 1, 1, 1, 0, 0}, \
+     {0, 0, 0, 1, 1, 0, 0, 0}, \
+     {0, 1, 0, 0, 0, 0, 1, 0}, \
+     {1, 0, 0, 0, 1, 0, 0, 1}  \
+ }
+ 
+#define RAIN { \
+     {0, 1, 1, 1, 0, 0, 0, 0}, \
+     {1, 0, 0, 0, 1, 1, 1, 0}, \
+     {1, 0, 0, 0, 1, 0, 0, 1}, \
+     {1, 0, 0, 0, 0, 0, 0, 1}, \
+     {0, 1, 1, 1, 1, 1, 1, 0}, \
+     {0, 0, 0, 0, 0, 0, 0, 0}, \
+     {0, 0, 1, 0, 1, 0, 0, 0}, \
+     {0, 1, 0, 1, 0, 0, 0, 0}  \
+ }
+ 
+#define CLOUDS { \
+     {0, 1, 1, 1, 0, 0, 0, 0}, \
+     {1, 0, 0, 0, 1, 1, 1, 0}, \
+     {1, 0, 0, 0, 1, 0, 0, 1}, \
+     {1, 0, 0, 0, 0, 0, 0, 1}, \
+     {0, 1, 1, 1, 1, 1, 1, 0}, \
+     {0, 0, 0, 0, 0, 0, 0, 0}, \
+     {0, 0, 0, 0, 0, 0, 0, 0}, \
+     {0, 0, 0, 0, 0, 0, 0, 0}  \
+ }
+
+bool SunIcon[8][8] = SUN;
+bool RainIcon[8][8] = RAIN;
+bool CloudsIcon[8][8] = CLOUDS;
+
 
 // =======================================================================
 // Конфигурация устройства:
@@ -50,6 +91,7 @@ String date1;
 String currencyRates;
 String weatherString;
 String weatherString1;
+String weatherIcon;
 
 String week;
 String days;
@@ -66,7 +108,7 @@ long period;
 int offset = 1, refresh = 0;
 int pinCS = 0; // Подключение пина CS
 int numberOfHorizontalDisplays = 4; // Количество светодиодных матриц по Горизонтали
-int numberOfVerticalDisplays = 1; // Количество светодиодных матриц по Вертикали
+int numberOfVerticalDisplays = 2; // Количество светодиодных матриц по Вертикали
 String decodedMsg;
 Max72xxPanel matrix = Max72xxPanel(pinCS, numberOfHorizontalDisplays, numberOfVerticalDisplays);
 //matrix.cp437(true);
@@ -84,9 +126,16 @@ void setup(void) {
   matrix.setRotation(1, 1);        // 2 матрица
   matrix.setRotation(2, 1);        // 3 матрица
   matrix.setRotation(3, 1);        // 4 матрица
-
+  matrix.setRotation(4, 1);        // 1 матрица
+  matrix.setRotation(5, 1);        // 2 матрица
+  matrix.setRotation(6, 1);        // 3 матрица
+  matrix.setRotation(7, 1);        // 4 матрица
   Serial.begin(115200);// Дебаг
 
+  Serial.println(LOW);
+  Serial.println(HIGH);
+
+  
   // для обработчика сериал порта
   SCmd.addCommand("date", showdate);
   SCmd.addCommand("weather", showweather);
@@ -107,11 +156,11 @@ void setup(void) {
 
     // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
     Serial.println("Start updating " + type);
-    ScrollText("       Start updating " + type);
+    ScrollText("       Start updating " + type,1);
   });
   ArduinoOTA.onEnd([]() {
     Serial.println("\nEnd");
-    ScrollText("     Updated!      ");
+    ScrollText("     Updated!      ",1);
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
@@ -126,9 +175,11 @@ void setup(void) {
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
   ArduinoOTA.begin();
-
+  //blinker.attach_ms(1000,DisplayTime);
   // ==============================================================
 }
+
+
 
 //обработчик комманд с сериал порта
 void unrecognized() {
@@ -205,14 +256,14 @@ void ConnectToWiFi(bool reconn) {
       retries++;
       if (retries == 200) {
         Serial.println("Connection error");
-        ScrollText(utf8rus(getDescriptionWiFi()));
+        ScrollText(utf8rus(getDescriptionWiFi()),1);
         retries = 0;
         return;
       }
       //Serial.println("Wifi stat " + WiFi.status());
     }
   } else {
-    ScrollText("       Connecting to " + String(ssid)  + " ");
+    ScrollText("       Connecting to " + String(ssid)  + " ",1);
     WiFi.mode(WIFI_STA);
     matrix.fillScreen(LOW);
     WiFi.begin(ssid, password);// Подключаемся к WIFI
@@ -233,13 +284,16 @@ void ConnectToWiFi(bool reconn) {
 
       if (retries == 200) {
         Serial.println("Connection error");
-        ScrollText(utf8rus(getDescriptionWiFi()));
+        ScrollText(utf8rus(getDescriptionWiFi()),1);
         retries = 0;
       }
-    }
+    }    
+    matrix.fillScreen(LOW);
+
     String ipstring = (String(WiFi.localIP()[0]) + "." + String(WiFi.localIP()[1]) + "." + String(WiFi.localIP()[2]) + "." + String(WiFi.localIP()[3]));
 
-    ScrollText(utf8rus("       Соединено. IP: " + ipstring + "  "));
+    ScrollText(utf8rus("       Соединено. IP: " + ipstring + "  "),1);
+    
     delay(1000);
   }
 }
@@ -266,60 +320,94 @@ void loop(void) {
   SCmd.readSerial();
   CheckWiFiConnection();
   ArduinoOTA.handle(); // Всегда готовы к прошивке
-
+  //interrupts();
   if (updCnt <= 0) { // каждые 10 циклов получаем данные времени и погоды
-    updCnt = 10;
+    updCnt = 50;
+    Serial.println("Getting data ...");
     getTime();
     getWeatherData();
-    Serial.println("Getting data ...");
-
-
     Serial.println("Data loaded");
     clkTime = millis();
   }
 
-  if (millis() - clkTime > 15000 && !del && dots && flag == 0) { //после первых 15 секунд запускаем бегущую строку даты
+  if (millis() - clkTime > 10000 && !del && flag == 0) { 
     DisplayDate();
     updCnt--;
     clkTime = millis();
   }
 
-  if (millis() - clkTime > 15000 && !del && dots && flag == 1) { //после вторых каждые 15 секунд запускаем бегущую строку погоды
+  if (millis() - clkTime > 2000 && !del && flag == 1) { 
     DisplayWeather();
     updCnt--;
     clkTime = millis();
   }
 
-  if (millis() - textTime > 15000 && flag == 2) { //после кажды 10 сек пускаем текст
-    ScrollText(utf8rus("Макс - жопка!"));
+  if (millis() - textTime > 2000 && flag == 2) { 
+    //ScrollText(utf8rus("   Рыжов, мы будем скучать!   "),2);
+    DisplayText(String(temp, 0) + "c",2);
+    drawWeatherIconFromStr(weatherIcon);
     updCnt--;
     textTime = millis();
     flag = 0;
   }
 
   DisplayTime();
-  if (millis() - dotTime > 500) {
-    dotTime = millis();
-    dots = !dots;
-  }
+//  if (millis() - dotTime > 500) {
+//    dotTime = millis();
+//    dots = !dots;
+//  }
 
 
 }
+
+
+void drawIcon(int xStart,int yStart,bool Icon[8][8]){
+  for (int y=yStart;y<yStart+8;y++){
+    for(int x=xStart;x<xStart+8;x++){
+      matrix.drawPixel(x,y,Icon[y-yStart][x-xStart]);  
+    }
+  }
+  matrix.write();
+}
+
+void drawWeatherIconFromStr(String iconStr){
+  Serial.println("icon: " + iconStr);
+  if (iconStr == "01d"){
+     
+    drawIcon(matrix.width()-8,8,SunIcon);
+    }
+  if (iconStr == "02d"){ 
+    drawIcon(matrix.width()-8,8,SunIcon);
+    }
+  if (iconStr == "09d"){ 
+    drawIcon(matrix.width()-8,8,RainIcon);
+    }
+  if (iconStr == "10d"){ 
+    drawIcon(matrix.width()-8,8,RainIcon);
+    }
+  if (iconStr == "11d"){ 
+    drawIcon(matrix.width()-8,8,RainIcon);
+    } //Groza
+  if (iconStr == "04d"){ 
+    Serial.println("CLOUDS");
+    drawIcon(matrix.width()-8,8,CloudsIcon);
+    }
+  if (iconStr == "03d"){ 
+    drawIcon(matrix.width()-8,8,CloudsIcon);
+    }
+}
+
 // =======================================================================
 void DisplayDate() {
-  date1 = (timestr + "   " + date + "   " + timestr);
-  matrix.fillScreen(LOW);
-  ScrollText(utf8rus(date1));
-  matrix.fillScreen(LOW);
+  date1 = ("      " + date + "      ");
+  ScrollText(utf8rus(date1),2);
   flag = 1;
 }
 
 // =======================================================================
 void DisplayWeather() {
-  weatherString1 = (timestr + "    " + weatherString + "   " + timestr);
-  matrix.fillScreen(LOW);
-  ScrollText(utf8rus(weatherString1));
-  matrix.fillScreen(LOW);
+  weatherString1 = ("      " + weatherString + "      ");
+  ScrollText(utf8rus(weatherString1),2);
   flag = 2;
 }
 
@@ -327,9 +415,10 @@ void DisplayWeather() {
 void DisplayTime() {
   updateTime();
 
-  if (s & 1)raz = ":"; //каждую четную секунду печатаем двоеточие по центру (чтобы мигало)
-  else raz = " ";
-
+  //if (s & 1)raz = ":"; //каждую четную секунду печатаем двоеточие по центру (чтобы мигало)
+  //else raz = " ";
+  raz = ":";
+  
   String hour1 = String (h / 10);
   String hour2 = String (h % 10);
   String min1 = String (m / 10);
@@ -341,23 +430,55 @@ void DisplayTime() {
   //    int xs = 28;
 
   timestr = (hour1 + hour2 + raz + min1 + min2);
-  DisplayText(timestr);
+  DisplayText(timestr,1);
 }
 
 // =======================================================================
-void DisplayText(String text) {
+void DisplayText(String text,byte str) {
+  int heiter = 0;
+  if (str == 1){
+    heiter = 16;
+  }else{
+    heiter = 0;  
+  }
+  clearString(str);
   for (int i = 0; i < text.length(); i++) {
     int letter = (matrix.width()) - i * (width - 1);
     int x = (matrix.width() + 1) - letter;
-    int y = (matrix.height() - 8) / 2; // Центрируем текст по Вертикали
+    int y = (matrix.height() - heiter) / 2; // Центрируем текст по Вертикали
     matrix.drawChar(x, y, text[i], HIGH, LOW, 1);
-    matrix.write(); // Вывод на дисплей
   }
+  matrix.write(); // Вывод на дисплей
+  delay(10);
 }
 // =======================================================================
 
-void ScrollText (String text) {
+void clearString(byte str){
+  int heiter = 0;
+  int start;
+  if (str == 1){
+    heiter = 8;
+    start=0;
+  }else{
+    heiter = 16;
+    start = 8;  
+  }
+  
+  for (int x=0;x<matrix.width();x++){
+    for (int y=start;y<heiter;y++){
+     matrix.drawPixel(x, y, LOW); 
+     }
+  }
+  matrix.write();
+}
 
+void ScrollText (String text,byte str) {
+  int heiter = 0;
+  if (str == 1){
+    heiter = 16;
+  }else{
+    heiter = 0;  
+  }
   for ( int i = 32 ; i < (width * text.length() + matrix.width() - 1 - spacer) - 32; i++ ) {
     if (refresh == 1) i = 0;
     refresh = 0;
@@ -365,7 +486,7 @@ void ScrollText (String text) {
     int letter = i / width;
     // int x =  1 - i % width;
     int x = (matrix.width() - 1) - i % width;
-    int y = (matrix.height() - 8) / 2; // Центрируем текст по Вертикали
+    int y = (matrix.height() - heiter) / 2; // Центрируем текст по Вертикали
 
     while ( x + width - spacer >= 0 && letter >= 0 ) {
       if ( letter < text.length() ) {
@@ -377,6 +498,7 @@ void ScrollText (String text) {
     matrix.write(); // Вывод на дисплей
     delay(wait);
   }
+  clearString(str);
 }
 
 
@@ -423,6 +545,7 @@ void getWeatherData()
   }
   //weatherMain = root["weather"]["main"].as<String>();
   weatherDescription = root["weather"]["description"].as<String>();
+  weatherIcon = root["weather"]["icon"].as<String>();
   weatherDescription.toLowerCase();
   //  weatherLocation = root["name"].as<String>();
   //  country = root["sys"]["country"].as<String>();
@@ -488,7 +611,7 @@ void getTime()
   client.setNoDelay(false);
   while (client.connected() && client.available()) {
     line = client.readStringUntil('\n');
-    Serial.println(line);
+    //Serial.println(line);
     line.toUpperCase();
     if (line.startsWith("DATE: ")) {
       week = line.substring(6, 9);
