@@ -342,8 +342,14 @@ void loop(void) {
     clkTime = millis();
   }
 
-  if (millis() - textTime > 2000 && flag == 2) { 
-    //ScrollText(utf8rus("   Рыжов, мы будем скучать!   "),2);
+    if (millis() - textTime > 2000 && flag == 2) { 
+    ScrollText(utf8rus("        Помни про график. Экономь бабло!        "),2);
+    updCnt--;
+    textTime = millis();
+    flag = 3;
+  }
+
+  if (millis() - textTime > 2000 && flag == 3) { 
     DisplayText(String(temp, 0) + "c",2);
     drawWeatherIconFromStr(weatherIcon);
     updCnt--;
@@ -351,6 +357,7 @@ void loop(void) {
     flag = 0;
   }
 
+  
   DisplayTime();
 //  if (millis() - dotTime > 500) {
 //    dotTime = millis();
@@ -496,6 +503,7 @@ void ScrollText (String text,byte str) {
       x -= width;
     }
     matrix.write(); // Вывод на дисплей
+    ArduinoOTA.handle();
     delay(wait);
   }
   clearString(str);
