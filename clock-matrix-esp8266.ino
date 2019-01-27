@@ -65,8 +65,8 @@ bool CloudsIcon[8][8] = CLOUDS;
 // =======================================================================
 // Конфигурация устройства:
 // =======================================================================
-const char* ssid     = "TraceAir";                      // SSID
-const char* password = "9262705996";                    // пароль
+const char* ssid     = "";                      // SSID
+const char* password = "";                    // пароль
 String weatherKey = "9fc8d50c1f5e7b3f010e0eee7375d903";  // Получить API ключ по ссылке http://openweathermap.org/api
 String weatherLang = "&lang=ru";
 String cityID = "524901"; //Москва
